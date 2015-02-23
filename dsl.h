@@ -83,13 +83,6 @@ typedef struct dsl_tag_iter {
     int (*next)(dsl_iter *);
     int (*prev)(dsl_iter *);
     int (*valid)(dsl_iter *);
-    DSL_DATA (*at)(dsl_iter *);
-    void (*set_at)(dsl_iter *, DSL_DATA);
-    void (*insert_at)(dsl_iter *, DSL_DATA);
-    void (*insert_after)(dsl_iter *, DSL_DATA);
-    DSL_DATA (*remove_at)(dsl_iter *);
-    //Virtual
-    void (*delete_at)(dsl_iter *);
 } dsl_iter;
 
 void dsl_iter_delete_at(dsl_iter *);
@@ -136,7 +129,13 @@ typedef struct dsl_tag_sequence_iter {
     size_t (*index)(dsl_sequence_iter *);
     int (*at_end)(dsl_iter *);
     int (*at_begin)(dsl_iter *);
+    DSL_DATA (*at)(dsl_iter *);
+    void (*set_at)(dsl_iter *, DSL_DATA);
+    void (*insert_at)(dsl_iter *, DSL_DATA);
+    void (*insert_after)(dsl_iter *, DSL_DATA);
+    DSL_DATA (*remove_at)(dsl_iter *);
     //Virtual
+    void (*delete_at)(dsl_iter *);
     int (*set_index)(dsl_sequence_iter *, size_t);
 } dsl_sequence_iter;
 
@@ -323,37 +322,46 @@ typedef struct dsl_tag_map {
     //Pure Virtual
     void (*iter)(dsl_map *, dsl_map_iter *);
     void (*iter_at)(dsl_map *, dsl_map_iter *, DSL_DATA);
+    void (*set_pair)(dsl_map *, dsl_pair *);
     //Virtual
+    void (*get_pair)(dsl_map *, dsl_pair *);
+    void (*remove_pair)(dsl_map *, dsl_pair *);
     size_t (*len)(dsl_map *);
     DSL_DATA (*get)(dsl_map *, DSL_DATA);
     void (*set)(dsl_map *, DSL_DATA, DSL_DATA);
+    void (*delete)(dsl_map *, DSL_DATA);
     int (*has)(dsl_map *, DSL_DATA);
     dsl_map *(*copy)(dsl_map *, dsl_type *);
 } dsl_map;
 
+void dsl_map_get_pair(dsl_map *, dsl_pair *);
+void dsl_map_remove_pair(dsl_map *, dsl_pair *);
 size_t dsl_map_len(dsl_map *);
 DSL_DATA dsl_map_get(dsl_map *, DSL_DATA);
 void dsl_map_set(dsl_map *, DSL_DATA, DSL_DATA);
+void dsl_map_delete(dsl_map *, DSL_DATA);
 int dsl_map_has(dsl_map *, DSL_DATA);
 dsl_map *dsl_map_copy(dsl_map *, dsl_type *);
-
-typedef struct {
-    DSL_DATA key;
-    DSL_DATA val;
-} dsl_keyval;
 
 typedef struct dsl_tag_map_iter dsl_map_iter;
 
 typedef struct dsl_tag_map_iter {
     dsl_iter _base;
+    //Pure Virtual
+    void (*at)(dsl_map_iter *, dsl_pair *);
+    void (*set_at)(dsl_map_iter *, dsl_pair *);
+    void (*remove_at)(dsl_map_iter *, dsl_pair *);
     //Virtual
     DSL_DATA (*key_at)(dsl_map_iter *);
     DSL_DATA (*val_at)(dsl_map_iter *);
+    void (*set_key)(dsl_map_iter *, DSL_DATA);
+    void (*set_val)(dsl_map_iter *, DSL_DATA);
 } dsl_map_iter;
 
 DSL_DATA dsl_map_iter_key_at(dsl_map_iter *);
 DSL_DATA dsl_map_iter_val_at(dsl_map_iter *);
-void dsl_map_iter_delete(dsl_map_iter *);
+void dsl_map_iter_set_key(dsl_map_iter *, DSL_DATA);
+void dsl_map_iter_set_val(dsl_map_iter *, DSL_DATA);
 
 //For convenience--not all maps *don't* support reverse seek.
 int dsl_map_iter_prev_invalid(dsl_map_iter *);
@@ -381,16 +389,16 @@ typedef struct {
 
 dsl_asseq *dsl_asseq_iter_owner(dsl_asseq_iter *);
 int dsl_asseq_iter_next(dsl_asseq_iter *);
-int dsl_asseq_iter_pref(dsl_asseq_iter *);
+int dsl_asseq_iter_prev(dsl_asseq_iter *);
 int dsl_asseq_valid(dsl_asseq_iter *);
-dsl_keyval dsl_asseq_iter_at(dsl_asseq_iter *);
-void dsl_asseq_iter_set_at(dsl_asseq_iter *, DSL_DATA);
-void dsl_asseq_iter_insert(dsl_asseq_iter *, dsl_keyval *);
-dsl_keyval dsl_asseq_iter_remove_at(dsl_asseq_iter *);
+void dsl_asseq_iter_at(dsl_asseq_iter *, dsl_pair *);
+void dsl_asseq_iter_set_at(dsl_asseq_iter *, dsl_pair *);
+void dsl_asseq_iter_remove_at(dsl_asseq_iter *, dsl_pair *);
 
 size_t dsl_asseq_len(dsl_asseq *);
 void dsl_asseq_iter(dsl_asseq *, dsl_asseq_iter *);
 void dsl_asseq_iter_at(dsl_asseq *, dsl_asseq_iter *, DSL_DATA);
+void dsl_asseq_set_pair(dsl_asseq *, dsl_pair *);
 
 typedef struct {
     dsl_map _base;
@@ -419,14 +427,13 @@ dsl_hmap *dsl_hmap_iter_owner(dsl_hmap_iter *);
 int dsl_hmap_iter_next(dsl_hmap_iter *);
 int dsl_hmap_iter_prev(dsl_hmap_iter *);
 int dsl_hmap_iter_valid(dsl_hmap_iter *);
-dsl_keyval dsl_hmap_iter_at(dsl_hmap_iter *);
-void dsl_hmap_iter_set_at(dsl_hmap_iter *, DSL_DATA);
-void dsl_hmap_iter_insert(dsl_hmap_iter *, dsl_keyval *);
-dsl_keyval dsl_hmap_iter_remove_at(dsl_hmap_iter *);
+void dsl_hmap_iter_at(dsl_hmap_iter *, dsl_pair *);
+void dsl_hmap_iter_set_at(dsl_hmap_iter *, dsl_pair *);
+void dsl_hmap_iter_remove_at(dsl_hmap_iter *, dsl_pair *);
 
 size_t dsl_hmap_len(dsl_hmap *);
-void dsl_hmap_set(dsl_hmap *, DSL_DATA, DSL_DATA);
 void dsl_hmap_iter(dsl_hmap *, dsl_hmap_iter *);
 void dsl_hmap_iter_at(dsl_hmap *, dsl_hmap_iter *, DSL_DATA);
+void dsl_hmap_set_pair(dsl_hmap *, dsl_pair *);
 
 #endif
