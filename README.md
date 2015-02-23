@@ -1,5 +1,7 @@
-dsl
+dsl/2.0
 ===
+
+*NOTE:* You are in the *2.0* branch; _this branch is not yet stable_. If you are looking for a stable release, use the master branch instead.
 
 DSL (pronounced "diesel") is a simple C Data Structure Library in the vein of the C++ Standard Template Library. Presently, it supports:
 
