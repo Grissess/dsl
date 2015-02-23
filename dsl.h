@@ -1,39 +1,41 @@
 #ifndef DSL_H
 #define DSL_H
 
-#ifndef DSL_DATA
+// TODO: Make DSL_DATA re-typeable (akin to templating?)
 typedef void *DSL_DATA;
-#endif
 
 #ifndef DSL_NULL
-#define DSL_NULL 0
+#define DSL_NULL ((void *) 0)
 #endif
 
-typedef struct {
-    DSL_DATA (*link)(DSL_DATA);
-    void (*unlink)(DSL_DATA);
-} dsl_incorp;
+typedef unsigned long hash_t;
 
-DSL_DATA dsl_link_void(dsl_incorp *, DSL_DATA);
-void dsl_unlink_void(dsl_incorp *, DSL_DATA);
-
-extern dsl_incorp DSL_INCORP_DEFAULT;
+// TODO: Type-check this (statically); maybe some other code analyzer?
+#define dsl_vt(obj, type, memb) ((type *) (obj)->memb)
 
 typedef struct {
     //Pure Virtual
-    int (*equal)(DSL_DATA, DSL_DATA);
-    int (*less)(DSL_DATA, DSL_DATA);
+    DSL_DATA (*link)(dsl_incorp *, DSL_DATA);
+    void (*unlink)(dsl_incorp *, DSL_DATA);
+    hash_t (*hash)(dsl_incorp *, DSL_DATA);
+    int (*equal)(dsl_incorp *, DSL_DATA, DSL_DATA);
+    int (*less)(dsl_incorp *, DSL_DATA, DSL_DATA);
     //Virtual
-    int (*greater)(DSL_DATA, DSL_DATA);
-    int (*lesseq)(DSL_DATA, DSL_DATA);
-    int (*greatereq)(DSL_DATA, DSL_DATA);
-    int (*noteq)(DSL_DATA, DSL_DATA);
-} dsl_relational;
+    int (*greater)(dsl_incorp *, DSL_DATA, DSL_DATA);
+    int (*lesseq)(dsl_incorp *, DSL_DATA, DSL_DATA);
+    int (*greatereq)(dsl_incorp *, DSL_DATA, DSL_DATA);
+    int (*noteq)(dsl_incorp *, DSL_DATA, DSL_DATA);
+} dsl_incorp;
 
-int dsl_relational_greater(dsl_relational *, DSL_DATA, DSL_DATA);
-int dsl_relational_lesseq(dsl_relational *, DSL_DATA, DSL_DATA);
-int dsl_relational_greatereq(dsl_relational *, DSL_DATA, DSL_DATA);
-int dsl_relational_noteq(dsl_relational *, DSL_DATA, DSL_DATA);
+DSL_DATA dsl_incorp_link_void(dsl_incorp *, DSL_DATA);
+void dsl_incorp_unlink_void(dsl_incorp *, DSL_DATA);
+
+int dsl_incorp_greater(dsl_incorp *, DSL_DATA, DSL_DATA);
+int dsl_incorp_lesseq(dsl_incorp *, DSL_DATA, DSL_DATA);
+int dsl_incorp_greatereq(dsl_incorp *, DSL_DATA, DSL_DATA);
+int dsl_incorp_noteq(dsl_incorp *, DSL_DATA, DSL_DATA);
+
+extern dsl_incorp DSL_INCORP_DEFAULT;
 
 typedef struct {
     void *(*alloc)(size_t);
@@ -47,7 +49,6 @@ typedef struct dsl_tag_object dsl_object;
 typedef struct {
     dsl_incorp incorp;
     dsl_allocator alloc;
-    dsl_relational rel;
     size_t szobj;
     size_t sztp;
     //Pure Virtual
@@ -81,15 +82,17 @@ typedef struct dsl_tag_iter {
     dsl_object *(*owner)(dsl_iter *);
     int (*next)(dsl_iter *);
     int (*prev)(dsl_iter *);
-    int (*at_end)(dsl_iter *);
-    int (*at_begin)(dsl_iter *);
     int (*valid)(dsl_iter *);
     DSL_DATA (*at)(dsl_iter *);
     void (*set_at)(dsl_iter *, DSL_DATA);
     void (*insert_at)(dsl_iter *, DSL_DATA);
     void (*insert_after)(dsl_iter *, DSL_DATA);
     DSL_DATA (*remove_at)(dsl_iter *);
+    //Virtual
+    void (*delete_at)(dsl_iter *);
 } dsl_iter;
+
+void dsl_iter_delete_at(dsl_iter *);
 
 typedef struct dsl_tag_sequence dsl_sequence;
 
@@ -114,6 +117,7 @@ typedef struct dsl_tag_sequence {
     void (*map)(dsl_sequence *, DSL_DATA (*)(DSL_DATA));
     void (*filter)(dsl_sequence *, int (*)(DSL_DATA));
     void (*sort)(dsl_sequence *, int (*)(DSL_DATA, DSL_DATA));
+    ssize_t (*search)(dsl_sequence *, DSL_DATA);
 } dsl_sequence;
 
 void dsl_sequence_delete(dsl_sequence *, size_t);
@@ -124,14 +128,16 @@ void dsl_sequence_append(dsl_sequence *, dsl_sequence *, dsl_type *);
 void dsl_sequence_map(dsl_sequence *, DSL_DATA (*)(DSL_DATA));
 void dsl_sequence_filter(dsl_sequence *, int (*)(DSL_DATA));
 void dsl_sequence_sort(dsl_sequence *, int (*)(DSL_DATA, DSL_DATA));
+ssize_t dsl_sequence_search(dsl_sequence *, DSL_DATA);
 
 typedef struct dsl_tag_sequence_iter {
     dsl_iter _base;
     //Pure Virtual
     size_t (*index)(dsl_sequence_iter *);
+    int (*at_end)(dsl_iter *);
+    int (*at_begin)(dsl_iter *);
     //Virtual
     int (*set_index)(dsl_sequence_iter *, size_t);
-    void (*delete_at)(dsl_sequence_iter *);
 } dsl_sequence_iter;
 
 int dsl_sequence_iter_set_index(dsl_iter *, size_t);
@@ -315,20 +321,112 @@ typedef struct dsl_tag_map dsl_map;
 typedef struct dsl_tag_map {
     dsl_object _base;
     //Pure Virtual
+    void (*iter)(dsl_map *, dsl_map_iter *);
+    void (*iter_at)(dsl_map *, dsl_map_iter *, DSL_DATA);
+    //Virtual
     size_t (*len)(dsl_map *);
     DSL_DATA (*get)(dsl_map *, DSL_DATA);
     void (*set)(dsl_map *, DSL_DATA, DSL_DATA);
-    //Virtual
     int (*has)(dsl_map *, DSL_DATA);
     dsl_map *(*copy)(dsl_map *, dsl_type *);
 } dsl_map;
+
+size_t dsl_map_len(dsl_map *);
+DSL_DATA dsl_map_get(dsl_map *, DSL_DATA);
+void dsl_map_set(dsl_map *, DSL_DATA, DSL_DATA);
+int dsl_map_has(dsl_map *, DSL_DATA);
+dsl_map *dsl_map_copy(dsl_map *, dsl_type *);
+
+typedef struct {
+    DSL_DATA key;
+    DSL_DATA val;
+} dsl_keyval;
 
 typedef struct dsl_tag_map_iter dsl_map_iter;
 
 typedef struct dsl_tag_map_iter {
     dsl_iter _base;
+    //Virtual
+    DSL_DATA (*key_at)(dsl_map_iter *);
+    DSL_DATA (*val_at)(dsl_map_iter *);
 } dsl_map_iter;
 
+DSL_DATA dsl_map_iter_key_at(dsl_map_iter *);
+DSL_DATA dsl_map_iter_val_at(dsl_map_iter *);
+void dsl_map_iter_delete(dsl_map_iter *);
 
+//For convenience--not all maps *don't* support reverse seek.
+int dsl_map_iter_prev_invalid(dsl_map_iter *);
+
+typedef struct {
+    dsl_map _base;
+    dsl_sequence seq;
+} dsl_asseq;
+
+typedef struct {
+    dsl_type _base;
+    dsl_type seqtype;
+} dsl_asseq_type;
+
+void dsl_asseq_construct(dsl_asseq_type *, dsl_asseq *);
+void dsl_asseq_destruct(dsl_asseq *);
+
+extern dsl_asseq_type DSL_ASSEQ_TYPE;
+
+typedef struct {
+    dsl_map_iter _base;
+    dsl_asseq *asseq;
+    dsl_sequence_iter seqit;
+} dsl_asseq_iter;
+
+dsl_asseq *dsl_asseq_iter_owner(dsl_asseq_iter *);
+int dsl_asseq_iter_next(dsl_asseq_iter *);
+int dsl_asseq_iter_pref(dsl_asseq_iter *);
+int dsl_asseq_valid(dsl_asseq_iter *);
+dsl_keyval dsl_asseq_iter_at(dsl_asseq_iter *);
+void dsl_asseq_iter_set_at(dsl_asseq_iter *, DSL_DATA);
+void dsl_asseq_iter_insert(dsl_asseq_iter *, dsl_keyval *);
+dsl_keyval dsl_asseq_iter_remove_at(dsl_asseq_iter *);
+
+size_t dsl_asseq_len(dsl_asseq *);
+void dsl_asseq_iter(dsl_asseq *, dsl_asseq_iter *);
+void dsl_asseq_iter_at(dsl_asseq *, dsl_asseq_iter *, DSL_DATA);
+
+typedef struct {
+    dsl_map _base;
+    dsl_array buckets;
+    //Virtual
+    void (*alloc)(dsl_hmap *, size_t);
+} dsl_hmap;
+
+typedef struct {
+    dsl_type _base;
+    dsl_type buckettype;
+} dsl_hmap_type;
+
+void dsl_hmap_construct(dsl_hmap_type *, dsl_hmap *);
+void dsl_hmap_destruct(dsl_hmap *);
+
+extern dsl_hmap_type DSL_HMAP_TYPE;
+
+typedef struct {
+    dsl_map_iter _base;
+    dsl_hmap *hmap;
+    dsl_sequence *bucket;
+} dsl_hmap_iter;
+
+dsl_hmap *dsl_hmap_iter_owner(dsl_hmap_iter *);
+int dsl_hmap_iter_next(dsl_hmap_iter *);
+int dsl_hmap_iter_prev(dsl_hmap_iter *);
+int dsl_hmap_iter_valid(dsl_hmap_iter *);
+dsl_keyval dsl_hmap_iter_at(dsl_hmap_iter *);
+void dsl_hmap_iter_set_at(dsl_hmap_iter *, DSL_DATA);
+void dsl_hmap_iter_insert(dsl_hmap_iter *, dsl_keyval *);
+dsl_keyval dsl_hmap_iter_remove_at(dsl_hmap_iter *);
+
+size_t dsl_hmap_len(dsl_hmap *);
+void dsl_hmap_set(dsl_hmap *, DSL_DATA, DSL_DATA);
+void dsl_hmap_iter(dsl_hmap *, dsl_hmap_iter *);
+void dsl_hmap_iter_at(dsl_hmap *, dsl_hmap_iter *, DSL_DATA);
 
 #endif
