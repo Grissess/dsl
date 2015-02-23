@@ -1,189 +1,334 @@
 #ifndef DSL_H
 #define DSL_H
 
-#ifndef DSL_DATATYPE
-typedef void *DSL_DATATYPE;
+#ifndef DSL_DATA
+typedef void *DSL_DATA;
 #endif
 
 #ifndef DSL_NULL
 #define DSL_NULL 0
 #endif
 
-typedef unsigned long size_t;
-typedef signed long ssize_t;
+typedef struct {
+    DSL_DATA (*link)(DSL_DATA);
+    void (*unlink)(DSL_DATA);
+} dsl_incorp;
+
+DSL_DATA dsl_link_void(dsl_incorp *, DSL_DATA);
+void dsl_unlink_void(dsl_incorp *, DSL_DATA);
+
+extern dsl_incorp DSL_INCORP_DEFAULT;
 
 typedef struct {
-	size_t con;
-	double prop;
-} dsl_overallocation;
+    //Pure Virtual
+    int (*equal)(DSL_DATA, DSL_DATA);
+    int (*less)(DSL_DATA, DSL_DATA);
+    //Virtual
+    int (*greater)(DSL_DATA, DSL_DATA);
+    int (*lesseq)(DSL_DATA, DSL_DATA);
+    int (*greatereq)(DSL_DATA, DSL_DATA);
+    int (*noteq)(DSL_DATA, DSL_DATA);
+} dsl_relational;
 
-dsl_overallocation *dsl_new_overalloc(void);
-void dsl_free_overalloc(dsl_overallocation *);
-void dsl_init_overalloc(dsl_overallocation *);
-void dsl_overalloc_set_const(dsl_overallocation *, size_t);
-void dsl_overalloc_set_prop(dsl_overallocation *, double);
-
-extern dsl_overallocation DSL_DEFAULT_OA;
-
-typedef void (*dsl_destructor)(DSL_DATATYPE);
-typedef DSL_DATATYPE (*dsl_copier)(DSL_DATATYPE);
-
-typedef struct {
-	dsl_destructor destr;
-	dsl_copier copy;
-} dsl_object_funcs;
-
-void dsl_null_destruct(DSL_DATATYPE);
-DSL_DATATYPE dsl_null_copy(DSL_DATATYPE);
-
-extern dsl_object_funcs DSL_DEFAULT_OF;
+int dsl_relational_greater(dsl_relational *, DSL_DATA, DSL_DATA);
+int dsl_relational_lesseq(dsl_relational *, DSL_DATA, DSL_DATA);
+int dsl_relational_greatereq(dsl_relational *, DSL_DATA, DSL_DATA);
+int dsl_relational_noteq(dsl_relational *, DSL_DATA, DSL_DATA);
 
 typedef struct {
-	DSL_DATATYPE *data;
-	size_t len;
-	size_t cap;
-	dsl_overallocation oa;
-	dsl_object_funcs of;
+    void *(*alloc)(size_t);
+    void (*free)(void *);
+} dsl_allocator;
+
+extern dsl_allocator DSL_ALLOCATOR_MALLOC;
+
+typedef struct dsl_tag_object dsl_object;
+
+typedef struct {
+    dsl_incorp incorp;
+    dsl_allocator alloc;
+    dsl_relational rel;
+    size_t szobj;
+    size_t sztp;
+    //Pure Virtual
+    void (*construct)(dsl_type *, dsl_object *);
+    void (*destruct)(dsl_object *);
+    //Virtual
+    dsl_object *(*create)(dsl_type *);
+    void (*destroy)(dsl_object *);
+    void (*copy)(dsl_type *, dsl_type *);
+    size_t (*size)(dsl_type *);
+} dsl_type;
+
+dsl_object *dsl_type_create(dsl_type *);
+void dsl_type_destroy(dsl_object *);
+void dsl_type_copy(dsl_type *, dsl_type *);
+size_t dsl_type_size(dsl_type *);
+
+void dsl_type_init(dsl_type *, size_t, size_t, void (*)(dsl_type *, dsl_object *), void (*)(dsl_object *));
+
+typedef struct dsl_tag_object {
+    dsl_type *type;
+    dsl_incorp incorp;
+    dsl_allocator alloc;
+} dsl_object;
+
+typedef struct dsl_tag_iter dsl_iter;
+
+typedef struct dsl_tag_iter {
+    dsl_object _base;
+    //Pure Virtual
+    dsl_object *(*owner)(dsl_iter *);
+    int (*next)(dsl_iter *);
+    int (*prev)(dsl_iter *);
+    int (*at_end)(dsl_iter *);
+    int (*at_begin)(dsl_iter *);
+    int (*valid)(dsl_iter *);
+    DSL_DATA (*at)(dsl_iter *);
+    void (*set_at)(dsl_iter *, DSL_DATA);
+    void (*insert_at)(dsl_iter *, DSL_DATA);
+    void (*insert_after)(dsl_iter *, DSL_DATA);
+    DSL_DATA (*remove_at)(dsl_iter *);
+} dsl_iter;
+
+typedef struct dsl_tag_sequence dsl_sequence;
+
+typedef struct dsl_tag_sequence_iter dsl_sequence_iter;
+
+typedef struct dsl_tag_sequence {
+    dsl_object _base;
+    //Pure virtual
+    size_t (*len)(dsl_sequence *);
+    DSL_DATA (*get)(dsl_sequence *, size_t);
+    void (*set)(dsl_sequence *, size_t, DSL_DATA);
+    void (*insert)(dsl_sequence *, size_t, DSL_DATA);
+    DSL_DATA (*remove)(dsl_sequence *, size_t);
+    void (*iter_start)(dsl_sequence *, dsl_sequence_iter *);
+    void (*iter_end)(dsl_sequence *, dsl_sequence_iter *);
+    //Virtual
+    void (*delete)(dsl_sequence *, size_t);
+    void (*fill)(dsl_sequence *, DSL_DATA);
+    void (*alloc)(dsl_sequence *, size_t);
+    dsl_sequence *(*copy)(dsl_sequence *, dsl_type *);
+    void (*append)(dsl_sequence *, dsl_sequence *, dsl_type *);
+    void (*map)(dsl_sequence *, DSL_DATA (*)(DSL_DATA));
+    void (*filter)(dsl_sequence *, int (*)(DSL_DATA));
+    void (*sort)(dsl_sequence *, int (*)(DSL_DATA, DSL_DATA));
+} dsl_sequence;
+
+void dsl_sequence_delete(dsl_sequence *, size_t);
+void dsl_sequence_fill(dsl_sequence *, DSL_DATA);
+void dsl_sequence_alloc(dsl_sequence *, size_t);
+dsl_sequence *dsl_sequence_copy(dsl_sequence *, dsl_type *);
+void dsl_sequence_append(dsl_sequence *, dsl_sequence *, dsl_type *);
+void dsl_sequence_map(dsl_sequence *, DSL_DATA (*)(DSL_DATA));
+void dsl_sequence_filter(dsl_sequence *, int (*)(DSL_DATA));
+void dsl_sequence_sort(dsl_sequence *, int (*)(DSL_DATA, DSL_DATA));
+
+typedef struct dsl_tag_sequence_iter {
+    dsl_iter _base;
+    //Pure Virtual
+    size_t (*index)(dsl_sequence_iter *);
+    //Virtual
+    int (*set_index)(dsl_sequence_iter *, size_t);
+    void (*delete_at)(dsl_sequence_iter *);
+} dsl_sequence_iter;
+
+int dsl_sequence_iter_set_index(dsl_iter *, size_t);
+void dsl_sequence_iter_delete_at(dsl_iter *);
+
+typedef struct {
+    size_t con;
+    double prop;
+} dsl_overalloc;
+
+typedef struct {
+    dsl_sequence _base;
+    dsl_overalloc oalloc;
+    size_t len;
+    size_t cap;
+    void *data;
 } dsl_array;
 
-dsl_array *dsl_new_array(dsl_overallocation *, dsl_object_funcs *);
-void dsl_free_array(dsl_array *);
-void dsl_array_alloc(dsl_array *, size_t);
-void dsl_array_fill(dsl_array *, size_t, DSL_DATATYPE);
-size_t dsl_array_len(dsl_array *);
-DSL_DATATYPE dsl_array_get(dsl_array *, size_t);
-void dsl_array_set(dsl_array *, size_t, DSL_DATATYPE);
-void dsl_array_insert(dsl_array *, size_t, DSL_DATATYPE);
-DSL_DATATYPE dsl_array_remove(dsl_array *, size_t);
-void dsl_array_delete(dsl_array *, size_t);
-dsl_array *dsl_array_copy(dsl_array *);
-dsl_array *dsl_array_append(dsl_array *, dsl_array *);
-
 typedef struct {
-	dsl_array *array;
-	ssize_t idx;
+    dsl_type _base;
+    dsl_overalloc oalloc;
+} dsl_array_type;
+
+void dsl_array_construct(dsl_array_type *, dsl_array *);
+void dsl_array_destruct(dsl_array *);
+
+extern dsl_array_type DSL_ARRAY_TYPE;
+
+typedef struct dsl_tag_array_iter dsl_array_iter;
+
+size_t dsl_array_len(dsl_array *);
+DSL_DATA dsl_array_get(dsl_array *, size_t);
+void dsl_array_set(dsl_array *, size_t, DSL_DATA);
+void dsl_array_insert(dsl_array *, size_t, DSL_DATA);
+DSL_DATA dsl_array_remove(dsl_array *, size_t);
+void dsl_array_alloc(dsl_array *, size_t);
+void dsl_array_iter_start(dsl_array *, dsl_array_iter *);
+void dsl_array_iter_end(dsl_array *, dsl_array_iter *);
+
+typedef struct dsl_tag_array_iter {
+    dsl_sequence_iter _base;
+    dsl_array *array;
+    ssize_t index;
 } dsl_array_iter;
 
-dsl_array_iter *dsl_new_array_iter(dsl_array *);
-dsl_array *dsl_array_iter_array(dsl_array_iter *);
-void dsl_free_array_iter(dsl_array_iter *);
-ssize_t dsl_array_iter_seek(dsl_array_iter *, size_t);
-ssize_t dsl_array_iter_index(dsl_array_iter *);
-DSL_DATATYPE dsl_array_iter_at(dsl_array_iter *);
-void dsl_array_iter_set_at(dsl_array_iter *, DSL_DATATYPE);
-void dsl_array_iter_insert_at(dsl_array_iter *, DSL_DATATYPE);
-void dsl_array_iter_insert_after(dsl_array_iter *, DSL_DATATYPE);
-DSL_DATATYPE dsl_array_iter_remove_at(dsl_array_iter *);
-void dsl_array_iter_delete_at(dsl_array_iter *);
+dsl_array *dsl_array_iter_owner(dsl_array_iter *);
 int dsl_array_iter_next(dsl_array_iter *);
 int dsl_array_iter_prev(dsl_array_iter *);
 int dsl_array_iter_at_end(dsl_array_iter *);
 int dsl_array_iter_at_begin(dsl_array_iter *);
-int dsl_array_iter_is_invalid(dsl_array_iter *);
+int dsl_array_iter_valid(dsl_array_iter *);
+size_t dsl_array_iter_index(dsl_array_iter *);
+int dsl_array_iter_set_index(dsl_array_iter *, size_t);
+DSL_DATA dsl_array_iter_at(dsl_array_iter *);
+void dsl_array_iter_set_at(dsl_array_iter *, DSL_DATA);
+void dsl_array_iter_insert_at(dsl_array_iter *, DSL_DATA);
+void dsl_array_iter_insert_after(dsl_array_iter *, DSL_DATA);
+DSL_DATA dsl_array_iter_remove_at(dsl_array_iter *);
 
-typedef struct tag_dsl_listnode {
-	DSL_DATATYPE data;
-	struct tag_dsl_listnode *prev;
-	struct tag_dsl_listnode *next;
-} dsl_listnode;
+typedef struct dsl_tag_string dsl_string;
 
-typedef struct {
-	dsl_listnode *first;
-	dsl_object_funcs of;
+typedef struct dsl_tag_string {
+    dsl_array _base;
+} dsl_string;
+
+typedef struct dsl_tag_string_iter dsl_string_iter;
+
+typedef struct dsl_tag_string_iter {
+    dsl_array_iter _base;
+} dsl_string_iter;
+
+typedef struct dsl_tag_bytes dsl_bytes;
+
+typedef struct dsl_tag_bytes {
+    dsl_string _base;
+} dsl_bytes;
+
+char dsl_bytes_get(dsl_bytes *, size_t);
+void dsl_bytes_set(dsl_bytes *, size_t, char);
+void dsl_bytes_insert(dsl_bytes *, size_t, char);
+char dsl_bytes_remove(dsl_bytes *, size_t);
+
+typedef struct dsl_tag_bytes_iter dsl_bytes_iter;
+
+typedef struct dsl_tag_bytes_iter {
+    dsl_string_iter _base;
+} dsl_bytes_iter;
+
+char dsl_bytes_iter_at(dsl_bytes_iter *);
+void dsl_bytes_iter_set_at(dsl_bytes_iter *, char);
+void dsl_bytes_iter_insert_at(dsl_bytes_iter *, char);
+void dsl_bytes_iter_insert_after(dsl_bytes_iter *, char);
+char dsl_bytes_iter_remove_at(dsl_bytes_iter *);
+
+typedef struct dsl_tag_text dsl_text;
+
+typedef struct dsl_tag_text {
+    dsl_string _base;
+} dsl_text;
+
+long dsl_text_get(dsl_bytes *, size_t);
+void dsl_text_set(dsl_bytes *, size_t, long);
+void dsl_text_insert(dsl_bytes *, size_t, long);
+long dsl_text_remove(dsl_bytes *, size_t);
+
+typedef struct dsl_tag_text_iter dsl_text_iter;
+
+typedef struct dsl_tag_text_iter {
+    dsl_string_iter _base;
+} dsl_text_iter;
+
+long dsl_text_iter_at(dsl_bytes_iter *);
+void dsl_text_iter_set_at(dsl_bytes_iter *, long);
+void dsl_text_iter_insert_at(dsl_bytes_iter *, long);
+void dsl_text_iter_insert_after(dsl_bytes_iter *, long);
+long dsl_text_iter_remove_at(dsl_bytes_iter *);long
+
+typedef struct dsl_tag_list_node dsl_list_node;
+
+typedef struct dsl_tag_list_node {
+    DSL_DATA data;
+    dsl_list_node *next;
+    dsl_list_node *prev;
+    int (*is_first)(dsl_list_node *);
+    int (*is_last)(dsl_list_node *);
+    //Virtual
+    void (*insert_at)(dsl_list_node *, DSL_DATA);
+    void (*insert_after)(dsl_list_node *, DSL_DATA);
+    void (*delete)(dsl_list_node *);
+    void (*delete_after)(dsl_list_node *);
+} dsl_list_node;
+
+typedef struct dsl_tag_list dsl_list;
+
+typedef struct dsl_tag_list {
+    dsl_sequence _base;
+    dsl_list_node *first;
 } dsl_list;
 
-dsl_list *dsl_new_list(dsl_object_funcs *);
-void dsl_free_list(dsl_list *);
-dsl_listnode *dsl_list_node(dsl_list *, size_t);
-size_t dsl_list_len(dsl_list *);
-DSL_DATATYPE dsl_list_get(dsl_list *, size_t);
-void dsl_list_set(dsl_list *, size_t, DSL_DATATYPE);
-void dsl_list_insert(dsl_list *, size_t, DSL_DATATYPE);
-DSL_DATATYPE dsl_list_remove(dsl_list *, size_t);
-void dsl_list_delete(dsl_list *, size_t);
-dsl_list *dsl_list_copy(dsl_list *);
-dsl_list *dsl_list_append(dsl_list *, dsl_list *);
+void dsl_list_construct(dsl_type *, dsl_list *);
+void dsl_list_destruct(dsl_list *);
 
-typedef struct {
-	dsl_list *list;
-	dsl_listnode *cur;
+extern dsl_type DSL_LIST_TYPE;
+
+typedef struct dsl_tag_list_iter dsl_list_iter;
+
+size_t dsl_list_len(dsl_list *);
+DSL_DATA dsl_list_get(dsl_list *, size_t);
+void dsl_list_set(dsl_list *, size_t, DSL_DATA);
+void dsl_list_insert(dsl_list *, size_t, DSL_DATA);
+DSL_DATA dsl_list_remove(dsl_list *, size_t);
+void dsl_list_iter_start(dsl_list *, dsl_list_iter *);
+void dsl_list_iter_end(dsl_list *, dsl_list_iter *);
+
+typedef struct dsl_tag_list_iter {
+    dsl_iter _base;
+    dsl_list *list;
+    dsl_list_node *cur;
 } dsl_list_iter;
 
-dsl_list_iter *dsl_new_list_iter(dsl_list *);
-dsl_list *dsl_list_iter_list(dsl_list_iter *);
-void dsl_free_list_iter(dsl_list_iter *);
-ssize_t dsl_list_iter_seek(dsl_list_iter *, size_t);
-ssize_t dsl_list_iter_index(dsl_list_iter *);
-DSL_DATATYPE dsl_list_iter_at(dsl_list_iter *);
-void dsl_list_iter_set_at(dsl_list_iter *, DSL_DATATYPE);
-void dsl_list_iter_insert_at(dsl_list_iter *, DSL_DATATYPE);
-void dsl_list_iter_insert_after(dsl_list_iter *, DSL_DATATYPE);
-DSL_DATATYPE dsl_list_iter_remove_at(dsl_list_iter *);
-void dsl_list_iter_delete_at(dsl_list_iter *);
+dsl_list *dsl_list_iter_sequence(dsl_list_iter *);
 int dsl_list_iter_next(dsl_list_iter *);
 int dsl_list_iter_prev(dsl_list_iter *);
 int dsl_list_iter_at_end(dsl_list_iter *);
 int dsl_list_iter_at_begin(dsl_list_iter *);
-int dsl_list_iter_is_invalid(dsl_list_iter *);
-
-typedef enum {DSL_SEQ_ARRAY, DSL_SEQ_LIST} dsl_seqtype;
-
-typedef struct {
-	dsl_seqtype type;
-	union {
-		dsl_array *array;
-		dsl_list *list;
-	};
-} dsl_seq;
-
-dsl_seq *dsl_seq_new_array(dsl_overallocation *, dsl_object_funcs *);
-dsl_seq *dsl_seq_new_list(dsl_object_funcs *);
-dsl_seq *dsl_seq_from_array(dsl_array *);
-dsl_seq *dsl_seq_from_list(dsl_list *);
-dsl_array *dsl_seq_to_array(dsl_seq *);
-dsl_list *dsl_seq_to_list(dsl_seq *);
-void dsl_free_seq(dsl_seq *);
-size_t dsl_seq_len(dsl_seq *);
-DSL_DATATYPE dsl_seq_get(dsl_seq *, size_t);
-void dsl_seq_set(dsl_seq *, size_t, DSL_DATATYPE);
-void dsl_seq_insert(dsl_seq *, size_t, DSL_DATATYPE);
-DSL_DATATYPE dsl_seq_remove(dsl_seq *, size_t);
-void dsl_seq_delete(dsl_seq *, size_t);
-dsl_seq *dsl_seq_copy(dsl_seq *);
-dsl_seq *dsl_seq_append(dsl_seq *, dsl_seq *);
+int dsl_list_iter_valid(dsl_list_iter *);
+size_t dsl_list_iter_index(dsl_list_iter *);
+DSL_DATA dsl_list_iter_at(dsl_list_iter *);
+void dsl_list_iter_set_at(dsl_list_iter *, DSL_DATA);
+void dsl_list_iter_insert_at(dsl_list_iter *, DSL_DATA);
+void dsl_list_iter_insert_after(dsl_list_iter *, DSL_DATA);
+DSL_DATA dsl_list_iter_remove_at(dsl_list_iter *);
 
 typedef struct {
-	dsl_seqtype type;
-	dsl_seq *seq;
-	union {
-		dsl_array_iter *array;
-		dsl_list_iter *list;
-	};
-} dsl_seq_iter;
+    DSL_DATA key;
+    DSL_DATA val;
+} dsl_pair;
 
-dsl_seq_iter *dsl_new_seq_iter(dsl_seq *);
-dsl_seq *dsl_seq_iter_seq(dsl_seq_iter *);
-void dsl_free_seq_iter(dsl_seq_iter *);
-ssize_t dsl_seq_iter_seek(dsl_seq_iter *, size_t);
-ssize_t dsl_seq_iter_index(dsl_seq_iter *);
-DSL_DATATYPE dsl_seq_iter_at(dsl_seq_iter *);
-void dsl_seq_iter_set_at(dsl_seq_iter *, DSL_DATATYPE);
-void dsl_seq_iter_insert_at(dsl_seq_iter *, DSL_DATATYPE);
-void dsl_seq_iter_insert_after(dsl_seq_iter *, DSL_DATATYPE);
-DSL_DATATYPE dsl_seq_iter_remove_at(dsl_seq_iter *);
-void dsl_seq_iter_delete_at(dsl_seq_iter *);
-int dsl_seq_iter_next(dsl_seq_iter *);
-int dsl_seq_iter_prev(dsl_seq_iter *);
-int dsl_seq_iter_at_end(dsl_seq_iter *);
-int dsl_seq_iter_at_begin(dsl_seq_iter *);
-int dsl_seq_iter_is_invalid(dsl_seq_iter *);
+typedef struct dsl_tag_map dsl_map;
 
-typedef DSL_DATATYPE (*dsl_map_func)(DSL_DATATYPE);
-typedef int (*dsl_filter_func)(DSL_DATATYPE);
-typedef int (*dsl_cmp_func)(DSL_DATATYPE, DSL_DATATYPE);
+typedef struct dsl_tag_map {
+    dsl_object _base;
+    //Pure Virtual
+    size_t (*len)(dsl_map *);
+    DSL_DATA (*get)(dsl_map *, DSL_DATA);
+    void (*set)(dsl_map *, DSL_DATA, DSL_DATA);
+    //Virtual
+    int (*has)(dsl_map *, DSL_DATA);
+    dsl_map *(*copy)(dsl_map *, dsl_type *);
+} dsl_map;
 
-void dsl_seq_map(dsl_seq *, dsl_map_func);
-void dsl_seq_filter(dsl_seq *, dsl_filter_func);
-void dsl_seq_sort(dsl_seq *, dsl_cmp_func);
+typedef struct dsl_tag_map_iter dsl_map_iter;
+
+typedef struct dsl_tag_map_iter {
+    dsl_iter _base;
+} dsl_map_iter;
+
+
 
 #endif
