@@ -8,200 +8,131 @@ array -- Arrays
 
 #include "dsl.h"
 
-dsl_overallocation *dsl_new_overalloc(void) {
-	dsl_overallocation *ret = malloc(sizeof(dsl_overallocation));
-	dsl_init_overalloc(ret);
-	return ret;
+void dsl_default_overalloc(dsl_overalloc *oalloc) {
+    oalloc->con = 0;
+    oalloc->prop = 1;
 }
 
-void dsl_free_overalloc(dsl_overallocation *oa) {
-	free(oa);
+void dsl_default_array(dsl_array_type *arrtp) {
+    dsl_default_type(dsl_as(dsl_type, arrtp));
+    dsl_vt(dsl_type, arrtp, szobj) = sizeof(dsl_array);
+    dsl_vt(dsl_type, arrtp, sztp) = sizeof(dsl_array_type);
+    dsl_vt(dsl_type, arrtp, construct) = dsl_array_construct;
+    dsl_vt(dsl_type, arrtp, destruct) = dsl_array_destruct;
+    dsl_default_overalloc(&(arrtp->oalloc));
 }
 
-void dsl_init_overalloc(dsl_overallocation *oa) {
-	oa->con = 0;
-	oa->prop = 0;
+void dsl_array_construct(dsl_array_type *arrtp, dsl_array *arr) {
+    dsl_sequence *seq = dsl_as(dsl_sequence, arr);
+    dsl_sequence_construct(dsl_as(dsl_type, arrtp), seq);
+    seq->len = dsl_array_len;
+    seq->get = dsl_array_get;
+    seq->set = dsl_array_set;
+    seq->insert = dsl_array_insert;
+    seq->remove = dsl_array_remove;
+    seq->iter_start = dsl_array_iter_start;
+    seq->iter_end = dsl_array_iter_end;
+    seq->alloc = dsl_array_alloc;
+    arr->data = NULL;
+    arr->len = 0;
+    arr->cap = 0;
+    arr->oalloc = arrtp->oalloc;
 }
 
-void dsl_overalloc_set_const(dsl_overallocation *oa, size_t con) {
-	oa->con = con;
-}
-
-void dsl_overalloc_set_prop(dsl_overallocation *oa, double prop) {
-	oa->prop = prop;
-}
-
-dsl_overallocation DSL_DEFAULT_OA = {0, 0};
-
-dsl_array *dsl_new_array(dsl_overallocation *oa, dsl_object_funcs *of) {
-	dsl_array *ret = malloc(sizeof(dsl_array));
-	if(!oa) oa = &DSL_DEFAULT_OA;
-	if(!of) of = &DSL_DEFAULT_OF;
-	ret->data = NULL;
-	ret->len = 0;
-	ret->cap = 0;
-	ret->oa = *oa;
-	ret->of = *of;
-	return ret;
-}
-
-void dsl_free_array(dsl_array *array) {
+void dsl_array_destruct(dsl_array *arr) {
 	size_t i;
-	if(!array) return;
-	for(i=0; i<array->len; i++) {
-		array->of.destr(array->data[i]);
+	dsl_retnull(arr,);
+	for(i=0; i<arr->len; i++) {
+		dsl_dvt(dsl_object, arr, incorp, unlink, arr->data[i]);
 	}
-	free(array->data);
-	free(array);
+	dsl_dvt(dsl_object, arr, alloc, free, array->data);
+	dsl_sequence_destruct(dsl_as(dsl_sequence, arr));
 }
 
-void dsl_array_alloc(dsl_array *array, size_t sz) {
+void dsl_array_alloc(dsl_array *arr, size_t sz) {
 	size_t i;
-	if(!array) return;
-	if(array->len > sz) {
-		for(i=sz; i<array->len; i++) {
-			array->of.destr(array->data[i]);
+	dsl_retnull(arr,);
+	if(arr->len > sz) {
+		for(i=sz; i<arr->len; i++) {
+		    dsl_dvt(dsl_object, arr, incorp, unlink, arr->data[i]);
 		}
-		array->len = sz;
+		arr->len = sz;
 	}
-	array->data = realloc(array->data, sz * sizeof(DSL_DATATYPE));
-	array->cap = sz;
+	arr->data = dsl_dvt(dsl_object, arr, alloc, realloc, arr->data, sz * sizeof(DSL_DATA));
+	arr->cap = sz;
 }
 
-void dsl_array_fill(dsl_array *array, size_t sz, DSL_DATATYPE value) {
-	size_t i;
-	if(!array) return;
-	dsl_array_alloc(array, sz);
-	for(i=0; i<sz; i++) {
-		array->data[i] = array->of.copy(value);
-	}
-	array->len = sz;
-}
-
-size_t dsl_array_len(dsl_array *array) {
-	if(!array) return 0;
+size_t dsl_array_len(dsl_array *arr) {
+    dsl_retnull(arr,)
 	return array->len;
 }
 
-DSL_DATATYPE dsl_array_get(dsl_array *array, size_t idx) {
-	if(!array) return DSL_NULL;
+DSL_DATA dsl_array_get(dsl_array *arr, size_t idx) {
+    dsl_retnull(arr, DSL_NULL);
 	if(idx < 0 || idx >= array->len) {
 		return DSL_NULL;
 	}
-	return array->data[idx];
+	return arr->data[idx];
 }
 
-void dsl_array_set(dsl_array *array, size_t idx, DSL_DATATYPE value) {
-	DSL_DATATYPE temp;
-	if(!array) return;
-	if(idx < 0 || idx >= array->len) return;
-	temp = array->data[idx];
-	array->data[idx] = array->of.copy(value);
-	array->of.destr(temp);
-	
-	//dsl_array_delete(array, idx);
-	//dsl_array_insert(array, idx, value);
+void dsl_array_set(dsl_array *arr, size_t idx, DSL_DATA value) {
+	DSL_DATA temp;
+	dsl_retnull(arr,);
+	if(idx < 0 || idx >= arr->len) return;
+	temp = arr->data[idx];
+	arr->data[idx] = dsl_dvt(dsl_object, arr, incorp, link, value);
+	dsl_dvt(dsl_object, arr, incorp, unlink, temp);
 }
 
-void dsl_array_insert(dsl_array *array, size_t idx, DSL_DATATYPE value) {
-	if(!array) return;
-	if(idx < 0 || idx > array->len) return;
-	if(array->len >= array->cap) {
-		array->cap += 1 + array->oa.con + (array->cap * array->oa.prop);
-		array->data = realloc(array->data, array->cap * sizeof(DSL_DATATYPE));
+void dsl_array_insert(dsl_array *arr, size_t idx, DSL_DATA value) {
+    dsl_retnull(arr,);
+	if(idx < 0 || idx > arr->len) return;
+	if(arr->len >= arr->cap) {
+		array->cap += 1 + arr->oalloc.con + (arr->cap * arr->oalloc.prop);
+		array->data = dsl_dvt(dsl_object, arr, alloc, realloc, array->data, array->cap * sizeof(DSL_DATATYPE));
 	}
-	memmove(array->data + (idx+1), array->data + idx, sizeof(DSL_DATATYPE) * (array->len - idx));
-	array->data[idx] = array->of.copy(value);
-	array->len++;
+	memmove(arr->data + (idx+1), arr->data + idx, sizeof(DSL_DATA) * (arr->len - idx));
+	arr->data[idx] = dsl_dvt(dsl_object, arr, incorp, link, value);
+	arr->len++;
 }
 
-DSL_DATATYPE dsl_array_remove(dsl_array *array, size_t idx) {
-	DSL_DATATYPE ret;
-	if(!array) return DSL_NULL;
-	if(idx < 0 || idx >= array->len) return DSL_NULL;
-	ret = array->data[idx];
-	memmove(array->data + idx, array->data + (idx+1), sizeof(DSL_DATATYPE) * (array->len - idx - 1));
-	array->len--;
-	array->of.destr(ret);
+DSL_DATA dsl_array_remove(dsl_array *arr, size_t idx) {
+	DSL_DATA ret;
+	dsl_retnull(arr, DSL_NULL);
+	if(idx < 0 || idx >= arr->len) return DSL_NULL;
+	ret = arr->data[idx];
+	memmove(arr->data + idx, arr->data + (idx+1), sizeof(DSL_DATA) * (arr->len - idx - 1));
+	arr->len--;
+	dsl_dvt(dsl_object, arr, incorp, unlink, ret);
 	return ret;
 }
 
-void dsl_array_delete(dsl_array *array, size_t idx) {
-	if(!array) return;
-	dsl_array_remove(array, idx);
+void dsl_array_delete(dsl_array *arr, size_t idx) {
+    dsl_retnull(arr,);
+	dsl_array_remove(arr, idx);
 }
 
-dsl_array *dsl_array_copy(dsl_array *src) {
-	size_t i;
-	dsl_array *dst;
-	if(!src) return dsl_new_array(NULL, NULL);
-	dst = dsl_new_array(&(src->oa), &(src->of));
-	if(src->len <= 0) return dst;
-	dst->data = realloc(dst->data, sizeof(DSL_DATATYPE) * src->len);
-	dst->cap = src->len;
-	dst->len = src->len;
-	/* This would work if invoking copyfunc weren't a must */
-	/*memcpy(dst->data, src->data, sizeof(DSL_DATATYPE) * src->len);*/
-	for(i=0; i<src->len; i++) {
-		dst->data[i] = src->of.copy(src->data[i]);
-	}
-	return dst;
+void dsl_array_iter_start(dsl_array *arr, dsl_array_iter *it) {
+    dsl_retnull(arr,);
+    it->array = arr;
+    it->index = 0;
 }
 
-dsl_array *dsl_array_append(dsl_array *left, dsl_array *right) {
-	dsl_array *ret;
-	size_t sz, i;
-	if(left) {
-		if(right) {
-			ret = dsl_new_array(&(left->oa), &(left->of));
-			sz = left->len + right->len;
-		} else {
-			ret = dsl_new_array(&(left->oa), &(left->of));
-			sz = left->len;
-		}
-	} else {
-		if(right) {
-			ret = dsl_new_array(&(right->oa), &(right->of));
-			sz = right->len;
-		} else {
-			return dsl_new_array(NULL, NULL);
-		}
-	}
-	if(sz <= 0) return ret;
-	ret->data = realloc(ret->data, sizeof(DSL_DATATYPE) * sz);
-	ret->cap = sz;
-	ret->len = sz;
-	for(i=0; i<(left?left->len:0); i++) {
-		ret->data[i] = left->of.copy(left->data[i]);
-	}
-	for(i=0; i<(right?right->len:0); i++) {
-		ret->data[i + (left?left->len:0)] = right->of.copy(right->data[i]);
-	}
-	return ret;
+void dsl_array_iter_end(dsl_array *arr, dsl_array_iter *it) {
+    dsl_retnull(arr,);
+    it->array = arr;
+    it->index = arr->len - 1;
 }
 
-dsl_array_iter *dsl_new_array_iter(dsl_array *array) {
-	dsl_array_iter *ret;
-	if(!array) return NULL;
-	ret = malloc(sizeof(dsl_array_iter));
-	ret->array = array;
-	ret->idx = (dsl_array_len(array)?0:-1);
-	return ret;
-}
+void dsl_array_iter_construct(dsl_type *tp, dsl_array_iter *it) {
+    dsl_sequence_iter *seqit = dsl_as(dsl_sequence_iter, it);
+    dsl_sequence_iter_construct(tp, seqit);
+    seqit->
 
-dsl_array *dsl_array_iter_array(dsl_array_iter *it) {
-	if(!it) return NULL;
-	return it->array;
-}
-
-void dsl_free_array_iter(dsl_array_iter *it) {
-	free(it);
-}
-
-ssize_t dsl_array_iter_seek(dsl_array_iter *it, size_t idx) {
-	if(!it) return -1;
-	if(idx < 0) idx = 0;
-	if(idx >= dsl_array_len(it->array)) idx = dsl_array_len(it->array) - 1;
+ssize_t dsl_array_iter_set_index(dsl_array_iter *it, size_t idx) {
+    dsl_retnull(it, -1);
+	if(idx < 0) idx = -1;
+	if(idx >= dsl_dast(dsl_sequence, it->array, len)) idx = -1;
 	it->idx = idx;
 	return idx;
 }
