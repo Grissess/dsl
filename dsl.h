@@ -1,6 +1,8 @@
 #ifndef DSL_H
 #define DSL_H
 
+#include <stdlib.h>
+
 #ifndef DSL_DATATYPE
 typedef void *DSL_DATATYPE;
 #endif
@@ -8,9 +10,6 @@ typedef void *DSL_DATATYPE;
 #ifndef DSL_NULL
 #define DSL_NULL 0
 #endif
-
-typedef unsigned long size_t;
-typedef signed long ssize_t;
 
 typedef struct {
 	size_t con;
