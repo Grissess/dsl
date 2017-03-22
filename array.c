@@ -85,7 +85,7 @@ size_t dsl_array_len(dsl_array *array) {
 
 DSL_DATATYPE dsl_array_get(dsl_array *array, size_t idx) {
 	if(!array) return DSL_NULL;
-	if(idx < 0 || idx >= array->len) {
+	if(idx >= array->len) {
 		return DSL_NULL;
 	}
 	return array->data[idx];
@@ -94,7 +94,7 @@ DSL_DATATYPE dsl_array_get(dsl_array *array, size_t idx) {
 void dsl_array_set(dsl_array *array, size_t idx, DSL_DATATYPE value) {
 	DSL_DATATYPE temp;
 	if(!array) return;
-	if(idx < 0 || idx >= array->len) return;
+	if(idx >= array->len) return;
 	temp = array->data[idx];
 	array->data[idx] = array->of.copy(value);
 	array->of.destr(temp);
@@ -105,7 +105,7 @@ void dsl_array_set(dsl_array *array, size_t idx, DSL_DATATYPE value) {
 
 void dsl_array_insert(dsl_array *array, size_t idx, DSL_DATATYPE value) {
 	if(!array) return;
-	if(idx < 0 || idx > array->len) return;
+	if(idx > array->len) return;
 	if(array->len >= array->cap) {
 		array->cap += 1 + array->oa.con + (array->cap * array->oa.prop);
 		array->data = realloc(array->data, array->cap * sizeof(DSL_DATATYPE));
@@ -118,7 +118,7 @@ void dsl_array_insert(dsl_array *array, size_t idx, DSL_DATATYPE value) {
 DSL_DATATYPE dsl_array_remove(dsl_array *array, size_t idx) {
 	DSL_DATATYPE ret;
 	if(!array) return DSL_NULL;
-	if(idx < 0 || idx >= array->len) return DSL_NULL;
+	if(idx >= array->len) return DSL_NULL;
 	ret = array->data[idx];
 	memmove(array->data + idx, array->data + (idx+1), sizeof(DSL_DATATYPE) * (array->len - idx - 1));
 	array->len--;
@@ -200,7 +200,6 @@ void dsl_free_array_iter(dsl_array_iter *it) {
 
 ssize_t dsl_array_iter_seek(dsl_array_iter *it, size_t idx) {
 	if(!it) return -1;
-	if(idx < 0) idx = 0;
 	if(idx >= dsl_array_len(it->array)) idx = dsl_array_len(it->array) - 1;
 	it->idx = idx;
 	return idx;
