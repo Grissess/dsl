@@ -1,0 +1,14 @@
+language: c
+before_install:
+    - pip install --user cpp-coveralls
+script:
+    - ./build.sh
+    - ./test
+    - clang -fsanitize=address -fsanitize=undefined *.c -o test
+    - ./test
+    - clang -fsanitize=memory *.c -o test
+    - ./test
+    - gcc --coverage *.c -o test
+    - ./test
+after_success:
+    - coveralls -E '*.o' -e test --gcov-options '\-lp'
