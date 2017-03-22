@@ -175,11 +175,11 @@ int dsl_list_iter_prev(dsl_list_iter *it) {
 }
 
 int dsl_list_iter_at_end(dsl_list_iter *it) {
-	return !it || it->cur && !it->cur->next;
+	return !it || (it->cur && !it->cur->next);
 }
 
 int dsl_list_iter_at_begin(dsl_list_iter *it) {
-	return !it || it->cur && !it->cur->prev;
+	return !it || (it->cur && !it->cur->prev);
 }
 
 int dsl_list_iter_is_invalid(dsl_list_iter *it) {
