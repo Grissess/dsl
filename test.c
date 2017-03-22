@@ -10,6 +10,8 @@ test -- Testing
 
 #define AS_INT(x) (*((int *) (x)))
 
+int test_seq(dsl_seq *seq);
+
 typedef struct {
 	int value;
 	int refs;
